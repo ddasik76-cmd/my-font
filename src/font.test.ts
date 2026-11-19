@@ -1,6 +1,7 @@
 import { describe,it,expect } from 'vitest';
 import * as ot from 'opentype.js';
 import {buildFont,compositionBoxes} from './font';
+import {convertOtfToTtf} from './ttf';
 import {tasks,groups,dependencies,decompose} from './charset';
 import {createProject,validateBackup} from './storage';
 import type {Project} from './types';
@@ -13,6 +14,10 @@ describe('실제 OTF 생성',()=>{
  it('전체 한글을 쓰고 재파싱해도 Unicode와 윤곽이 보존된다',()=>{const p=fixture();const {buffer,codes}=buildFont(p);expect(new TextDecoder().decode(buffer.slice(0,4))).toBe('OTTO');expect(codes.filter(c=>c>=0xac00&&c<=0xd7a3)).toHaveLength(11172);expect(codes.length).toBe(11318);const font=ot.parse(buffer);for(let code=0xac00;code<=0xd7a3;code++){const glyph=font.charToGlyph(String.fromCharCode(code));expect(glyph.unicode).toBe(code);expect(glyph.path.commands.length).toBeGreaterThan(0);const b=glyph.getBoundingBox();expect(Number.isFinite(b.x1)).toBe(true);expect(b.x1).toBeGreaterThanOrEqual(-200);expect(b.y2).toBeLessThan(1000);}expect(font.charToGlyph(' ').path.commands.length).toBe(0);expect(font.charToGlyph('!').unicode).toBe(33);},30000);
  it('미작성 자모를 가짜 폰트로 채우지 않는다',()=>{const p=fixture();delete p.glyphs['initial-0'];const {buffer,codes}=buildFont(p,['가','나','A','😀']);expect(codes).not.toContain(0xac00);expect(codes).toContain('나'.charCodeAt(0));expect(ot.parse(buffer).charToGlyphIndex('가')).toBe(0);});
  it('작은 기호의 크기를 캔버스와 같은 비율로 유지한다',()=>{const p=fixture();const dot=tasks.find(t=>t.char==='.')!;p.glyphs[dot.id].strokes=[{width:8,points:[[250,400]]}];const font=ot.parse(buildFont(p,['.']).buffer);const b=font.charToGlyph('.').getBoundingBox();expect(b.x2-b.x1).toBeLessThan(30);});
+});
+describe('TrueType 변환',()=>{
+ it('실제 TTF 시그니처와 한글 문자 매핑·윤곽을 보존한다',()=>{const p=fixture();const {buffer,codes}=buildFont(p,['가','각','A',' ']);const ttf=convertOtfToTtf(buffer,codes);expect(new DataView(ttf).getUint32(0)).toBe(0x00010000);const parsed=ot.parse(ttf);expect(parsed.outlinesFormat).toBe('truetype');for(const c of ['가','각','A']){const glyph=parsed.charToGlyph(c);expect(glyph.unicode).toBe(c.charCodeAt(0));expect(glyph.path.commands.length).toBeGreaterThan(0);}expect(parsed.charToGlyph(' ').path.commands).toHaveLength(0);});
+ it('전체 현대 한글을 TTF로 변환하고 모든 Unicode를 재검증한다',()=>{const p=fixture();const {buffer,codes}=buildFont(p);const ttf=convertOtfToTtf(buffer,codes);const parsed=ot.parse(ttf);expect(parsed.outlinesFormat).toBe('truetype');expect(codes.filter(c=>c>=0xac00&&c<=0xd7a3)).toHaveLength(11172);for(let code=0xac00;code<=0xd7a3;code++)expect(parsed.charToGlyphIndex(String.fromCharCode(code))).toBeGreaterThan(0);},120000);
 });
 describe('백업 보호',()=>{
  it('백업 왕복 시 필기와 설정을 유지하고 새 ID를 만든다',()=>{const p=fixture();p.spacing=60;const restored=validateBackup(JSON.parse(JSON.stringify(p)));expect(restored.glyphs).toEqual(p.glyphs);expect(restored.spacing).toBe(60);expect(restored.id).not.toBe(p.id);});

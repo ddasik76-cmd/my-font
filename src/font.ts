@@ -79,7 +79,7 @@ export function buildFont(project:Project,chars?:string[],progress?:(n:number)=>
  }
  const options={familyName:project.name,styleName:'Regular',unitsPerEm:1000,ascender:950,descender:-250,glyphs,postScriptName:'MyWriting-'+project.id.replace(/[^a-z0-9]/gi,'').slice(0,20)+'-Regular'}; const font=new ot.Font(options);
  // Stable ASCII PostScript identifier, while the family name keeps the user's Korean name.
- progress?.(90);const buffer=font.toArrayBuffer();const parsed=ot.parse(buffer);
+ progress?.(90);const buffer=font.toArrayBuffer();progress?.(97);const parsed=ot.parse(buffer);
  for(const code of included){if(!parsed.charToGlyphIndex(String.fromCharCode(code)))throw new Error('폰트 문자 검증에 실패했습니다.');}
  progress?.(100);return {buffer,codes:included};
 }
